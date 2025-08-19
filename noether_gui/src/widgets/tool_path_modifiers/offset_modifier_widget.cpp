@@ -5,6 +5,7 @@
 
 #include <noether_tpp/tool_path_modifiers/offset_modifier.h>
 #include <yaml-cpp/yaml.h>
+#include <QSignalBlocker>
 
 namespace noether
 {
@@ -21,14 +22,33 @@ OffsetModifierWidget::OffsetModifierWidget(QWidget* parent)
 
   auto page_quaternion = new QWidget(this);
   ui_quaternion_->setupUi(page_quaternion);
+
+  for (noether::DistanceDoubleSpinBox* b : {
+       ui_vector_->double_spin_box_x,
+       ui_vector_->double_spin_box_y,
+       ui_vector_->double_spin_box_z })
+    b->setKeyboardTracking(false);
+
+  for (QDoubleSpinBox* b : {
+         ui_quaternion_->double_spin_box_qx,
+         ui_quaternion_->double_spin_box_qy,
+         ui_quaternion_->double_spin_box_qz,
+         ui_quaternion_->double_spin_box_qw })
+    b->setKeyboardTracking(false);
+
   ui_quaternion_->group_box->setTitle("Rotation");
   layout->addWidget(page_quaternion);
-
-  setLayout(layout);
 }
 
 void OffsetModifierWidget::configure(const YAML::Node& config)
 {
+  const QSignalBlocker bx(ui_vector_->double_spin_box_x);
+  const QSignalBlocker by(ui_vector_->double_spin_box_y);
+  const QSignalBlocker bz(ui_vector_->double_spin_box_z);
+  const QSignalBlocker bqx(ui_quaternion_->double_spin_box_qx);
+  const QSignalBlocker bqy(ui_quaternion_->double_spin_box_qy);
+  const QSignalBlocker bqz(ui_quaternion_->double_spin_box_qz);
+  const QSignalBlocker bqw(ui_quaternion_->double_spin_box_qw);
   ui_vector_->double_spin_box_x->setValue(getEntry<double>(config, "x"));
   ui_vector_->double_spin_box_y->setValue(getEntry<double>(config, "y"));
   ui_vector_->double_spin_box_z->setValue(getEntry<double>(config, "z"));
@@ -59,8 +79,12 @@ ToolPathModifier::ConstPtr OffsetModifierWidget::create() const
                        ui_quaternion_->double_spin_box_qy->value(),
                        ui_quaternion_->double_spin_box_qz->value());
 
-  // Normalize the quaternion in case the values are not unit length
-  q.normalize();
+  // Normalize the quaternion in case the values are not unit length.
+  // Avoid normalizing zero-length quaternion.
+  if (q.squaredNorm() < 1e-12 || !std::isfinite(q.norm()))
+    q = Eigen::Quaterniond::Identity();
+  else
+    q.normalize();
 
   Eigen::Isometry3d offset = Eigen::Isometry3d::Identity();
   offset.translation() = position;
