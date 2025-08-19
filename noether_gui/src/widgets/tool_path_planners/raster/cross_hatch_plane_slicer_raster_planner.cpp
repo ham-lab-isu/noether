@@ -7,6 +7,7 @@
 #include <noether_tpp/tool_path_planners/raster/direction_generators/pca_rotated_direction_generator.h>
 #include <noether_tpp/tool_path_planners/raster/plane_slicer_raster_planner.h>
 #include <QDoubleSpinBox>
+#include <QThread>
 #include <yaml-cpp/yaml.h>
 
 namespace noether
@@ -21,10 +22,23 @@ CrossHatchPlaneSlicerRasterPlannerWidget::CrossHatchPlaneSlicerRasterPlannerWidg
   cross_hatch_angle_->setValue(M_PI_2);
   cross_hatch_angle_->setDecimals(3);
   ui_->form_layout->addRow(new QLabel("Cross Hatch Angle", this), cross_hatch_angle_);
+
+  for (QAbstractSpinBox* box : {
+         static_cast<QAbstractSpinBox*>(cross_hatch_angle_),
+         static_cast<QAbstractSpinBox*>(ui_->double_spin_box_line_spacing),
+         static_cast<QAbstractSpinBox*>(ui_->double_spin_box_point_spacing),
+         static_cast<QAbstractSpinBox*>(ui_->double_spin_box_minimum_hole_size),
+         static_cast<QAbstractSpinBox*>(search_radius_),
+         static_cast<QAbstractSpinBox*>(min_segment_size_)
+       })
+  {
+    box->setKeyboardTracking(false);
+  }
 }
 
 ToolPathPlanner::ConstPtr CrossHatchPlaneSlicerRasterPlannerWidget::create() const
 {
+  Q_ASSERT(QThread::currentThread() == this->thread());
   // Create the nominal tool path planner
   auto nominal_tpp = PlaneSlicerRasterPlannerWidget::create();
 
@@ -51,6 +65,14 @@ ToolPathPlanner::ConstPtr CrossHatchPlaneSlicerRasterPlannerWidget::create() con
 
 void CrossHatchPlaneSlicerRasterPlannerWidget::configure(const YAML::Node& config)
 {
+  // Block signals on *all* fields that get written during configure
+  const QSignalBlocker b0(cross_hatch_angle_);
+  const QSignalBlocker b1(ui_->double_spin_box_line_spacing);
+  const QSignalBlocker b2(ui_->double_spin_box_point_spacing);
+  const QSignalBlocker b3(ui_->double_spin_box_minimum_hole_size);
+  const QSignalBlocker b4(search_radius_);
+  const QSignalBlocker b5(min_segment_size_);
+
   PlaneSlicerRasterPlannerWidget::configure(config);
   cross_hatch_angle_->setValue(getEntry<double>(config, "cross_hatch_angle"));
 }
